@@ -37,7 +37,7 @@ io.on('connection', function(socket){
   })
 
   socket.on('drone_command', function(drone, command) {
-    socket.broadcast.to(drone).emit('command', {command})
+    socket.broadcast.to(drone).emit('command', JSON.parse(command))
     console.log('Command to drone ' + drone + ': ' + command)
   })
 
