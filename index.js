@@ -4,6 +4,9 @@ const io = require('socket.io')(http)
 
 let drones = []
 let clients = []
+let droneData = []
+
+// const RA
 
 app.get('/', function(req, res){
   res.sendFile(__dirname + '/index.html')
@@ -41,11 +44,43 @@ io.on('connection', function(socket){
     console.log('Command to drone ' + drone + ': ' + command)
   })
 
-  socket.on('test', function(one, two, three) {
-    console.log('testi festi', one, two, three)
+  socket.on('tune', function(drone) {
+    droneData.push({drone, data: []})
+    
+    let P = 10
+    let I = 0
+    let D = 0
+    const pid_type = 'pitch'
+    const P_INCREMENT = 10
+    
+    let data
+    let pitch
+    let roll
+    let azimuth
+
+    setInterval(() => {
+      data = getDrone(drone).data
+
+      pitch = data.map(({pitch}) => pitch)
+      // roll = data.map(({roll}) => roll)
+      // azimuth = data.map(({azimuth}) => azimuth)
+
+
+      pitch.
+
+
+      P += P_INCREMENT
+
+      getDrone(drone).data = []
+
+      socket.broadcast.to(drone).emit('command', {P, I, D, type: 'pid', pid_type})
+    }, 1000)
   })
 
+  const getDrone = droneId => droneData.find(({drone}) => drone === droneId)
+
   socket.on('drone_data', function(data) {
+    getDrone(data.drone) && getDrone(data.drone).data.push(data)
     tellClients(socket, 'drone_data', data)
   })
 
