@@ -6,7 +6,8 @@ let drones = []
 let clients = []
 let droneData = []
 
-// const RA
+const RAD_CUTOFF = 0.5
+const WOBBLE_THRESHOLD = 10
 
 app.get('/', function(req, res){
   res.sendFile(__dirname + '/index.html')
@@ -52,29 +53,75 @@ io.on('connection', function(socket){
     let D = 0
     const pid_type = 'pitch'
     const P_INCREMENT = 10
+    const D_INCREMENT = 10
+    const I_INCREMENT = 10
+    const STD_THRESHOLD = 0.2
+
+    const I_EPSILON = 0.1
     
     let data
     let pitch
     let roll
     let azimuth
 
-    setInterval(() => {
+    let status = 'tuneP'
+
+    const intervalId = setInterval(() => {
       data = getDrone(drone).data
 
-      pitch = data.map(({pitch}) => pitch)
-      // roll = data.map(({roll}) => roll)
-      // azimuth = data.map(({azimuth}) => azimuth)
+      if (status === 'tuneP') {
+        pitch = data.map(({pitch}) => pitch)
+        // roll = data.map(({roll}) => roll)
+        // azimuth = data.map(({azimuth}) => azimuth)
+  
+  
+        let countWobble = 0
+        let prevSide = null
+  
+        pitch.forEach(value => {
+          if (value > RAD_CUTOFF || value < -RAD_CUTOFF) {
+           const side = value < 0 ? 'left' : 'right'
+            if (prevSide === null || prevSide !== side) {
+              prevSide = side
+              countWobble++
+            }
+          }
+        })
+  
+        if (countWobble >= WOBBLE_THRESHOLD) {
+          console.log('P IS', P)
+          // clearInterval(intervalId)
+          status = 'tuneD'
+        }
+  
+  
+        P += P_INCREMENT
+  
+      } else if (status === 'tuneD') {
+        const mean = pitch.reduce((a,b) =>a+b , 0) / pitch.length
+        const stdDev = pitch.map(value => (value-mean)*(value-mean)).reduce((a,b) => a+b, 0) / (pitch.length-1)
 
+        if (stdDev >= STD_THRESHOLD) {
+          console.log('D IS', D)
+          status = 'tuneI'
+        }
 
-      pitch.
+        D += D_INCREMENT
 
+      } else if (status === 'tuneI') {
+        const mean = pitch.reduce((a,b) =>a+b , 0) / pitch.length
 
-      P += P_INCREMENT
+        if (Math.abs(mean) >= I_EPSILON) {
+          console.log('I IS', I)
+          clearInterval(intervalId)
+        }
+      }
 
       getDrone(drone).data = []
+      
 
       socket.broadcast.to(drone).emit('command', {P, I, D, type: 'pid', pid_type})
-    }, 1000)
+    }, 5000)
   })
 
   const getDrone = droneId => droneData.find(({drone}) => drone === droneId)
