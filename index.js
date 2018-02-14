@@ -6,8 +6,8 @@ let drones = []
 let clients = []
 let droneData = []
 
-const RAD_CUTOFF = 0.5
-const WOBBLE_THRESHOLD = 10
+const RAD_CUTOFF = 0.1
+const WOBBLE_THRESHOLD = 5
 
 app.get('/', function(req, res){
   res.sendFile(__dirname + '/index.html')
@@ -48,14 +48,14 @@ io.on('connection', function(socket){
   socket.on('tune', function(drone) {
     droneData.push({drone, data: []})
     
-    let P = 10
+    let P = 160
     let I = 0
     let D = 0
     const pid_type = 'pitch'
     const P_INCREMENT = 10
     const D_INCREMENT = 10
     const I_INCREMENT = 10
-    const STD_THRESHOLD = 0.2
+    const STD_THRESHOLD = 0.01
 
     const I_EPSILON = 0.1
     
@@ -64,17 +64,22 @@ io.on('connection', function(socket){
     let roll
     let azimuth
 
-    let status = 'tuneP'
+    let status = 'tuneD'
+
+    socket.broadcast.to(drone).emit('command', {P, I, D, type: 'pid', pid_type})
 
     const intervalId = setInterval(() => {
       data = getDrone(drone).data
+      pitch = data.map(({pitch}) => pitch)
+
 
       if (status === 'tuneP') {
-        pitch = data.map(({pitch}) => pitch)
+        console.log('tuning P, value is', P)
         // roll = data.map(({roll}) => roll)
         // azimuth = data.map(({azimuth}) => azimuth)
   
   
+        
         let countWobble = 0
         let prevSide = null
   
@@ -84,13 +89,18 @@ io.on('connection', function(socket){
             if (prevSide === null || prevSide !== side) {
               prevSide = side
               countWobble++
+              console.log('counting one wobble')
             }
           }
         })
+        
+        console.log('wobble count is', countWobble)
   
         if (countWobble >= WOBBLE_THRESHOLD) {
-          console.log('P IS', P)
-          // clearInterval(intervalId)
+          const oldP = P
+          P = Math.floor(P * 0.8)
+          console.log('final P IS', P, 'tuned P is', oldP)
+          
           status = 'tuneD'
         }
   
@@ -98,10 +108,13 @@ io.on('connection', function(socket){
         P += P_INCREMENT
   
       } else if (status === 'tuneD') {
-        const mean = pitch.reduce((a,b) =>a+b , 0) / pitch.length
+        console.log('tuning D, value is', D)
+        const mean = pitch.reduce((a,b) => a + b , 0) / pitch.length
         const stdDev = pitch.map(value => (value-mean)*(value-mean)).reduce((a,b) => a+b, 0) / (pitch.length-1)
 
-        if (stdDev >= STD_THRESHOLD) {
+        console.log('D tune, mean is', mean, 'std is', stdDev)
+
+        if (stdDev <= STD_THRESHOLD) {
           console.log('D IS', D)
           status = 'tuneI'
         }
@@ -109,12 +122,20 @@ io.on('connection', function(socket){
         D += D_INCREMENT
 
       } else if (status === 'tuneI') {
+        console.log('tuning I, value is', I)
         const mean = pitch.reduce((a,b) =>a+b , 0) / pitch.length
 
-        if (Math.abs(mean) >= I_EPSILON) {
+        console.log('I tune, mean is', mean)
+
+
+
+
+        if (Math.abs(mean) <= I_EPSILON) {
           console.log('I IS', I)
           clearInterval(intervalId)
         }
+
+        I += I_INCREMENT
       }
 
       getDrone(drone).data = []
