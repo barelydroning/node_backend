@@ -1,10 +1,19 @@
 const app = require('express')()
 const http = require('http').Server(app)
 const io = require('socket.io')(http)
+const winston = require('winston')
+
+const logger = new(winston.Logger)({
+  transports: [
+      new(winston.transports.File)({filename: 'drone.log'})
+  ]
+});
 
 let drones = []
 let clients = []
 let droneData = []
+
+let record = false
 
 const RAD_CUTOFF = 0.1
 const WOBBLE_THRESHOLD = 5
@@ -33,6 +42,10 @@ io.on('connection', function(socket){
       tellClients(socket, 'connected_drones', drones)
       socket.emit('connected_drones', drones)
     }
+  })
+
+  socket.on('record', function(recording) {
+    record = recording
   })
 
   socket.on('connect_client', function() {
@@ -148,6 +161,7 @@ io.on('connection', function(socket){
   const getDrone = droneId => droneData.find(({drone}) => drone === droneId)
 
   socket.on('drone_data', function(data) {
+    record && logger.info(data)
     getDrone(data.drone) && getDrone(data.drone).data.push(data)
     tellClients(socket, 'drone_data', data)
   })
