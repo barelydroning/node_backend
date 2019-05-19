@@ -12,6 +12,7 @@ const logger = new (winston.Logger)({
 let drones = []
 let clients = []
 let droneData = []
+let rovers = []
 
 let record = false
 
@@ -24,6 +25,10 @@ app.get('/', function (req, res) {
 
 app.get('/drones', function (req, res) {
   res.json(drones)
+})
+
+app.get('/rovers', function (req, res) {
+  res.json(rovers)
 })
 
 const tellClients = (socket, command, message) => {
@@ -44,6 +49,14 @@ io.on('connection', function (socket) {
     }
   })
 
+  socket.on('connect_rover', function () {
+    if (!rovers.includes(socket.id)) {
+      rovers.push(socket.id)
+      tellClients(socket, 'connected_rovers', rovers)
+      socket.emit('connected_rovers', rovers)
+    }
+  })
+
   socket.on('record', function (recording) {
     record = recording
   })
@@ -51,11 +64,12 @@ io.on('connection', function (socket) {
   socket.on('connect_client', function () {
     !clients.includes(socket.id) && clients.push(socket.id)
     socket.emit('connected_drones', drones)
+    socket.emit('connected_rovers', rovers)
   })
 
-  socket.on('drone_command', function (drone, command) {
-    socket.broadcast.to(drone).emit('command', JSON.parse(command))
-    console.log('Command to drone ' + drone + ': ' + command)
+  socket.on('robot_command', function (robot, command) {
+    socket.broadcast.to(robot).emit('command', JSON.parse(command))
+    console.log('Command to robot ' + robot + ': ' + command)
   })
 
   socket.on('tune', function (drone) {
@@ -160,8 +174,10 @@ io.on('connection', function (socket) {
     const id = socket.id
     drones = drones.includes(id) ? drones.filter(drone => drone !== id) : drones
     clients = clients.includes(id) ? clients.filter(client => client !== id) : clients
+    rovers = rovers.includes(id) ? rovers.filter(rover => rover !== id) : rovers
     clients.forEach(client => {
       socket.broadcast.to(client).emit('connected_drones', drones)
+      socket.broadcast.to(client).emit('connected_rovers', rovers)
     })
     console.log('user disconnected')
   })
