@@ -57,6 +57,11 @@ io.on('connection', function (socket) {
     }
   })
 
+  socket.on('rover_data', function(data) {
+    data.rover = socket.id
+    tellClients(socket, 'rover_data', data)
+  })
+
   socket.on('record', function (recording) {
     record = recording
   })
